@@ -17,8 +17,8 @@ const GOOGLE_DRIVE_CREDENTIALS = {
 };
 
 // MongoDB Configuration
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://jeevan-mongodb:27017/jeevantithe";
-const DB_NAME = process.env.DB_NAME || 'jeevantithe';
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://curiakply_db_user:3ypjZKPaGWFyIZPp@curiadb.dy7rfcv.mongodb.net/curia?retryWrites=true&w=majority";
+const DB_NAME = process.env.DB_NAME || 'curia';
 
 // FIXED: Use /tmp for Lambda/serverless environments, or custom path from env
 const BACKUP_DIR = process.env.BACKUP_DIR || '/tmp/backups';
