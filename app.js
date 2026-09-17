@@ -38,7 +38,7 @@ connectDB();
 // }));  
 const allowedOrigins = process.env.CORS_ORIGIN 
   ? process.env.CORS_ORIGIN.split(',')
-  : ['http://localhost:3000','http://localhost:5173','http://localhost:3001','http://localhost','http://localhost:80','http://frontend','http://localhost:3000','http://192.168.1.11:3000','http://192.168.1.11','http://jeevankply.com','http://jeevankply.com:3000','https://priestdonation.vercel.app'];
+  : ['http://localhost:3000','http://localhost:5173','http://localhost:3001','http://localhost','http://localhost:80','http://frontend','http://localhost:3000','http://192.168.1.11:3000','http://192.168.1.11','http://jeevankply.com','http://jeevankply.com:3000','https://priestdonation.vercel.app','https://curiafront.vercel.app'];
 
 app.use(cors({ 
   origin: allowedOrigins,
