@@ -59,7 +59,7 @@ const authRouter = require('./routes/auth.routes');
 // const auth = require("./routes/auth");
 
 
-const parishdata = require("./routes/parishData");
+// const parishdata = require("./routes/parishData");
 
 const adminManagementRoutes = require('./routes/adminmanagement');
 const backupRoutes = require('./routes/backup');
