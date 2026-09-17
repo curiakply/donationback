@@ -2,9 +2,7 @@ const mongoose = require('mongoose');
 
 
 const Parish = require("../models/Parish");
-const Family = require("../models/Family");
-const Person = require("../models/Person");
-const Koottayma = require("../models/Koottayma");
+
 const Forane = require("../models/Forane");   
 async function getAllParishes(req, res) {
   try {
