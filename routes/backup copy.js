@@ -1,11 +1,12 @@
-// Backend - Database Backup System (Vercel Compatible - No mongodump needed)
+// Backend - Database Backup System
 const express = require('express');
 const router = express.Router();
 const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
 const archiver = require('archiver');
-const mongoose = require('mongoose');
+const schedule = require('node-schedule');
 
 // Google Drive Configuration
 const GOOGLE_DRIVE_CREDENTIALS = {
@@ -16,12 +17,13 @@ const GOOGLE_DRIVE_CREDENTIALS = {
 };
 
 // MongoDB Configuration
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://curiakply_db_user:3ypjZKPaGWFyIZPp@curiadb.dy7rfcv.mongodb.net";
 const DB_NAME = process.env.DB_NAME || 'curia';
 
-// Use /tmp for Vercel/serverless environments
+// FIXED: Use /tmp for Lambda/serverless environments, or custom path from env
 const BACKUP_DIR = process.env.BACKUP_DIR || '/tmp/backups';
 
-// Ensure backup directory exists
+// Ensure backup directory exists with proper error handling
 try {
   if (!fs.existsSync(BACKUP_DIR)) {
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
@@ -29,6 +31,7 @@ try {
   }
 } catch (error) {
   console.error('⚠ Warning: Could not create backup directory:', error.message);
+  console.error('Backups will fail unless BACKUP_DIR is set to a writable location.');
 }
 
 // Initialize Google Drive API
@@ -47,46 +50,34 @@ const getGoogleDriveClient = () => {
 };
 
 /**
- * Create MongoDB backup using Mongoose (No mongodump needed!)
- * Exports all collections as JSON files
+ * Create MongoDB backup using mongodump
  */
 const createMongoDBBackup = async () => {
-  if (!fs.existsSync(BACKUP_DIR)) {
-    fs.mkdirSync(BACKUP_DIR, { recursive: true });
-  }
-
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupName = `backup_${DB_NAME}_${timestamp}`;
-  const backupPath = path.join(BACKUP_DIR, backupName);
-
-  if (!fs.existsSync(backupPath)) {
-    fs.mkdirSync(backupPath, { recursive: true });
-  }
-
-  // Get all collections from the database
-  const db = mongoose.connection.db;
-  const collections = await db.listCollections().toArray();
-
-  console.log(`Found ${collections.length} collections to backup`);
-
-  let totalDocuments = 0;
-
-  for (const collection of collections) {
-    const name = collection.name;
-    try {
-      const data = await db.collection(name).find({}).toArray();
-      const filePath = path.join(backupPath, `${name}.json`);
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-      totalDocuments += data.length;
-      console.log(`✓ Exported ${name}: ${data.length} documents`);
-    } catch (err) {
-      console.error(`✗ Error exporting ${name}:`, err.message);
+  return new Promise((resolve, reject) => {
+    // Check if backup directory is available
+    if (!fs.existsSync(BACKUP_DIR)) {
+      reject(new Error('Backup directory not available'));
+      return;
     }
-  }
 
-  console.log(`Backup complete: ${collections.length} collections, ${totalDocuments} total documents`);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupName = `backup_${DB_NAME}_${timestamp}`;
+    const backupPath = path.join(BACKUP_DIR, backupName);
 
-  return { backupPath, backupName, collectionsCount: collections.length, totalDocuments };
+    // Create mongodump command
+    const command = `mongodump --uri="${MONGODB_URI}" --db="${DB_NAME}" --out="${backupPath}"`;
+
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        console.error('Backup error:', error);
+        reject(error);
+        return;
+      }
+
+      console.log('Backup created:', stdout);
+      resolve({ backupPath, backupName });
+    });
+  });
 };
 
 /**
@@ -120,6 +111,7 @@ const uploadToGoogleDrive = async (filePath, fileName) => {
   try {
     const drive = getGoogleDriveClient();
 
+    // Create folder if doesn't exist
     const folderName = 'Database Backups';
     let folderId = await findOrCreateFolder(drive, folderName);
 
@@ -152,6 +144,7 @@ const uploadToGoogleDrive = async (filePath, fileName) => {
  */
 const findOrCreateFolder = async (drive, folderName) => {
   try {
+    // Search for existing folder
     const response = await drive.files.list({
       q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
       fields: 'files(id, name)',
@@ -162,6 +155,7 @@ const findOrCreateFolder = async (drive, folderName) => {
       return response.data.files[0].id;
     }
 
+    // Create new folder
     const folderMetadata = {
       name: folderName,
       mimeType: 'application/vnd.google-apps.folder'
@@ -184,12 +178,16 @@ const findOrCreateFolder = async (drive, folderName) => {
  */
 const cleanupLocalBackup = async (backupPath, zipPath) => {
   try {
-    if (backupPath && fs.existsSync(backupPath)) {
+    // Remove backup directory
+    if (fs.existsSync(backupPath)) {
       fs.rmSync(backupPath, { recursive: true, force: true });
     }
-    if (zipPath && fs.existsSync(zipPath)) {
+    
+    // Remove zip file
+    if (fs.existsSync(zipPath)) {
       fs.unlinkSync(zipPath);
     }
+    
     console.log('Local backup files cleaned up');
   } catch (error) {
     console.error('Cleanup error:', error);
@@ -197,26 +195,22 @@ const cleanupLocalBackup = async (backupPath, zipPath) => {
 };
 
 /**
- * GET /backup/status
+ * GET /api/backup/status
+ * Get backup system status
  */
 router.get('/status', async (req, res) => {
   try {
+    // Check if Google Drive is configured
     const isDriveConfigured = !!(
       GOOGLE_DRIVE_CREDENTIALS.client_id &&
       GOOGLE_DRIVE_CREDENTIALS.client_secret &&
       GOOGLE_DRIVE_CREDENTIALS.refresh_token
     );
 
-    let isBackupDirWritable = false;
-    try {
-      if (!fs.existsSync(BACKUP_DIR)) {
-        fs.mkdirSync(BACKUP_DIR, { recursive: true });
-      }
-      isBackupDirWritable = true;
-    } catch (e) {
-      isBackupDirWritable = false;
-    }
+    // Check if backup directory is writable
+    const isBackupDirWritable = fs.existsSync(BACKUP_DIR);
 
+    // Get list of local backups
     const localBackups = isBackupDirWritable
       ? fs.readdirSync(BACKUP_DIR)
           .filter(file => file.endsWith('.zip'))
@@ -230,25 +224,6 @@ router.get('/status', async (req, res) => {
           })
       : [];
 
-    // Get database info
-    let dbInfo = {};
-    try {
-      if (mongoose.connection.readyState === 1) {
-        const db = mongoose.connection.db;
-        const collections = await db.listCollections().toArray();
-        dbInfo = {
-          connected: true,
-          databaseName: db.databaseName,
-          collectionsCount: collections.length,
-          collections: collections.map(c => c.name)
-        };
-      } else {
-        dbInfo = { connected: false };
-      }
-    } catch (e) {
-      dbInfo = { connected: false, error: e.message };
-    }
-
     res.json({
       success: true,
       status: {
@@ -256,10 +231,8 @@ router.get('/status', async (req, res) => {
         backupDirectory: BACKUP_DIR,
         backupDirWritable: isBackupDirWritable,
         databaseName: DB_NAME,
-        database: dbInfo,
         localBackupsCount: localBackups.length,
-        localBackups,
-        engine: 'mongoose (serverless compatible)'
+        localBackups
       }
     });
   } catch (error) {
@@ -273,20 +246,21 @@ router.get('/status', async (req, res) => {
 });
 
 /**
- * POST /backup/create
+ * POST /api/backup/create
+ * Create manual backup and upload to Google Drive
  */
 router.post('/create', async (req, res) => {
   let backupPath, zipPath;
 
   try {
-    // Check MongoDB connection
-    if (mongoose.connection.readyState !== 1) {
-      throw new Error('MongoDB is not connected. Please check your database connection.');
+    // Check if backup directory exists
+    if (!fs.existsSync(BACKUP_DIR)) {
+      throw new Error(`Backup directory not available: ${BACKUP_DIR}. Set BACKUP_DIR environment variable to a writable location.`);
     }
 
-    // Step 1: Create MongoDB backup using Mongoose
+    // Step 1: Create MongoDB backup
     console.log('Creating MongoDB backup...');
-    const { backupPath: bp, backupName, collectionsCount, totalDocuments } = await createMongoDBBackup();
+    const { backupPath: bp, backupName } = await createMongoDBBackup();
     backupPath = bp;
 
     // Step 2: Compress backup
@@ -308,14 +282,13 @@ router.post('/create', async (req, res) => {
         size: driveFile.size,
         created: driveFile.createdTime,
         driveLink: driveFile.webViewLink,
-        fileId: driveFile.id,
-        collectionsCount,
-        totalDocuments
+        fileId: driveFile.id
       }
     });
   } catch (error) {
     console.error('Backup creation error:', error);
-
+    
+    // Cleanup on error
     if (backupPath || zipPath) {
       await cleanupLocalBackup(backupPath, zipPath);
     }
@@ -329,7 +302,8 @@ router.post('/create', async (req, res) => {
 });
 
 /**
- * GET /backup/list
+ * GET /api/backup/list
+ * List all backups from Google Drive
  */
 router.get('/list', async (req, res) => {
   try {
@@ -369,14 +343,17 @@ router.get('/list', async (req, res) => {
 });
 
 /**
- * DELETE /backup/:fileId
+ * DELETE /api/backup/:fileId
+ * Delete backup from Google Drive
  */
 router.delete('/:fileId', async (req, res) => {
   try {
     const { fileId } = req.params;
     const drive = getGoogleDriveClient();
 
-    await drive.files.delete({ fileId });
+    await drive.files.delete({
+      fileId: fileId
+    });
 
     res.json({
       success: true,
@@ -393,44 +370,104 @@ router.delete('/:fileId', async (req, res) => {
 });
 
 /**
- * POST /backup/download-json
- * Download backup as JSON without Google Drive (fallback)
+ * POST /api/backup/schedule
+ * Setup automatic backup schedule
+ * Body: { frequency: 'daily' | 'weekly' | 'monthly', time: '02:00' }
  */
-router.post('/download-json', async (req, res) => {
+router.post('/schedule', async (req, res) => {
   try {
-    if (mongoose.connection.readyState !== 1) {
-      throw new Error('MongoDB is not connected');
+    const { frequency, time } = req.body;
+
+    // Cancel existing scheduled jobs
+    schedule.gracefulShutdown();
+
+    let cronExpression;
+    const [hour, minute] = time.split(':');
+
+    switch (frequency) {
+      case 'daily':
+        cronExpression = `${minute} ${hour} * * *`;
+        break;
+      case 'weekly':
+        cronExpression = `${minute} ${hour} * * 0`; // Sunday
+        break;
+      case 'monthly':
+        cronExpression = `${minute} ${hour} 1 * *`; // 1st of month
+        break;
+      default:
+        throw new Error('Invalid frequency');
     }
 
-    const db = mongoose.connection.db;
-    const collections = await db.listCollections().toArray();
-    const backup = {};
+    // Schedule the job
+    schedule.scheduleJob(cronExpression, async () => {
+      console.log('Running scheduled backup...');
+      try {
+        const { backupPath, backupName } = await createMongoDBBackup();
+        const zipPath = await compressBackup(backupPath, backupName);
+        await uploadToGoogleDrive(zipPath, `${backupName}.zip`);
+        await cleanupLocalBackup(backupPath, zipPath);
+        console.log('Scheduled backup completed successfully');
+      } catch (error) {
+        console.error('Scheduled backup failed:', error);
+      }
+    });
 
-    for (const collection of collections) {
-      const name = collection.name;
-      backup[name] = await db.collection(name).find({}).toArray();
-    }
-
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileName = `backup_${DB_NAME}_${timestamp}.json`;
-
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.json({
       success: true,
-      database: DB_NAME,
-      timestamp: new Date().toISOString(),
-      collectionsCount: collections.length,
-      data: backup
+      message: 'Backup schedule configured',
+      schedule: {
+        frequency,
+        time,
+        cronExpression
+      }
     });
   } catch (error) {
-    console.error('Download backup error:', error);
+    console.error('Schedule configuration error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to create downloadable backup',
+      message: 'Failed to configure schedule',
       error: error.message
     });
   }
 });
 
 module.exports = router;
+
+// ============================================
+// SETUP INSTRUCTIONS:
+// ============================================
+
+/*
+1. Install required packages:
+   npm install googleapis archiver node-schedule
+
+2. Setup Google Drive API:
+   - Go to https://console.cloud.google.com/
+   - Create a new project or select existing
+   - Enable Google Drive API
+   - Create OAuth 2.0 credentials
+   - Add authorized redirect URI
+   - Get refresh token using OAuth playground
+
+3. Add to .env file:
+   GOOGLE_CLIENT_ID=your_client_id
+   GOOGLE_CLIENT_SECRET=your_client_secret
+   GOOGLE_REDIRECT_URI=your_redirect_uri
+   GOOGLE_REFRESH_TOKEN=your_refresh_token
+   MONGODB_URI=mongodb://localhost:27017
+   DB_NAME=your_database_name
+   BACKUP_DIR=/tmp/backups  # Add this for Lambda/serverless
+
+4. Register routes in your main app:
+   const backupRoutes = require('./routes/backup');
+   app.use('/api/backup', backupRoutes);
+
+5. Make sure mongodump is installed:
+   - MongoDB Database Tools must be installed
+   - Download from: https://www.mongodb.com/try/download/database-tools
+   
+6. For AWS Lambda/Serverless:
+   - Set BACKUP_DIR=/tmp/backups in environment variables
+   - Note: /tmp has 512MB limit and is ephemeral
+   - Consider uploading directly to S3 or Google Drive without local storage
+*/
