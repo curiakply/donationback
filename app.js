@@ -52,42 +52,18 @@ const priest = require("./routes/priestRouter");
 const position = require("./routes/positionRouter");
 const department = require("./routes/departmentRoutes");
 app.use('/congregation', require('./routes/congregationRouter'));
-const forane = require("./routes/forane");
+
 const parish = require("./routes/parish");
 const authRouter = require('./routes/auth.routes');
 const filterRoutes = require('./routes/filterRoutes');
 // const auth = require("./routes/auth");
-const koottayma = require("./routes/koottayma");
-const family = require("./routes/family");
-const person = require("./routes/person");
-const community = require("./routes/community");
-const transaction = require("./routes/transaction");
-const familyRoutes = require("./routes/familyRoutes");
-const parishupload = require("./routes/parishexcel");
-const koottaymaupload = require("./routes/koottaymaexcel");
-const familiesupload = require("./routes/familyexcel");
-const personupload = require("./routes/personexcel");
-const transupload = require("./routes/transexcel");
-const allocationSettings = require("./routes/allocationsettings");
-const communitySettings=require("./routes/communitysetting");
-const slab=require("./routes/slabRoutes");
-const fund = require("./routes/fund");
-const projects = require("./routes/ProjectsRouter");
-const projectSettingsRoutes = require("./routes/projectSettingsRoutes");
+
+
 const parishdata = require("./routes/parishData");
-const familymovements  = require("./routes/familyMovement");
-const personmovements  = require("./routes/personMovementRoutes");
-const parishallocations  = require("./routes/parishAllocation");
-const totlalloc  = require("./routes/totalAmountRoutes");
-const transactionRoutes  = require("./routes/transactionRoutes");
-const superAdminRoutes = require('./routes/analytics');
-const balance  = require("./routes/balanceRoutes");
+
 const adminManagementRoutes = require('./routes/adminmanagement');
 const backupRoutes = require('./routes/backup');
-const transactionAnalyticsRoutes = require('./routes/transactionAnalyticsRoutes');
-const printTemplateRoutes = require("./routes/printTemplate.routes");
-const marriageRouter = require("./routes/marriageRouter");
-const printsettings = require("./routes/printSettingsRoutes");
+
 const donationRouter = require("./routes/donationRouter");
 
 app.use(session({
@@ -118,36 +94,14 @@ app.use("/diocese", diocese);
 app.use("/priest", priest);
 app.use("/position", position);
 app.use("/department", department);
-app.use("/forane", forane);
+
 app.use("/parish", parish);
-app.use("/koottayma", koottayma);
-app.use("/family", family);
-app.use("/person", person);
-app.use("/community", community);
-app.use("/transaction", transaction);
-app.use("/families", familyRoutes);
-app.use("/parishup", parishupload);
-app.use("/koottaymaup", koottaymaupload);
-app.use("/familiesup", familiesupload);
-app.use("/personup", personupload);
-app.use("/transup", transupload);
-app.use("/allocationsettings", allocationSettings);
-app.use('/community-settings', communitySettings);
-app.use("/print-template", printTemplateRoutes);
-app.use("/marriage", marriageRouter);
-app.use("/print-settings", printsettings);
-app.use('/slabs', slab);
-app.use("/fund", fund);
-app.use("/parishdata", parishdata);
-app.use('/project-settings', projectSettingsRoutes);
+
+
+
 app.use("/organization", require("./routes/Organizationroutes"));
 app.use("/narration", require("./routes/Narrationroutes"));
-app.use('/family-movements', familymovements);
-app.use('/person-movements', personmovements);
-app.use('/parish-allocations', parishallocations);
-app.use('/totlalloc', totlalloc);
-app.use('/transactionRoutes', transactionRoutes); 
-app.use('/balance', balance);
+
 app.use('/admin-management', adminManagementRoutes);
 app.use("/donations", donationRouter);
 app.use("/donation-report", require("./routes/Donationreportroutes"));
