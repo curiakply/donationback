@@ -17,6 +17,7 @@ const options = require("./config/swaggerOptions");
 // const authRoutes = require('./routes/auth');
 const authRoutes = require('./routes/auth.routes');
 const { verifyToken } = require('./middleware/auth.middleware');
+// const superAdminRoutes = require('./routes/analytics');
 const app = express();
 
 const port = process.env.PORT || 5000;
@@ -121,7 +122,7 @@ app.use(
 
 
 app.use('/auth', authRoutes);
-app.use('/analytics', superAdminRoutes);
+// app.use('/analytics', superAdminRoutes);
 app.use((req, res, next) => {
   console.log('Session:', req.session);
   next();
