@@ -86,7 +86,7 @@ app.get("/", (req, res) => {
 app.get('/ping', (req, res) => res.json({ ok: true }));
 app.use('/assignment', require('./routes/assignmentRouter'));
 // Add this route
-app.use('/analytics', transactionAnalyticsRoutes);
+// app.use('/analytics', transactionAnalyticsRoutes);
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use('/authf', require('./routes/forgotPasswordRoutes'));
 //app.use("/auth", auth);
