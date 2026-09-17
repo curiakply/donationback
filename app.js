@@ -55,7 +55,7 @@ app.use('/congregation', require('./routes/congregationRouter'));
 
 const parish = require("./routes/parish");
 const authRouter = require('./routes/auth.routes');
-const filterRoutes = require('./routes/filterRoutes');
+
 // const auth = require("./routes/auth");
 
 
@@ -110,8 +110,8 @@ app.use("/priest-ledger", require("./routes/Priestledgerroutes"));
 app.use("/curia-dashboard", require("./routes/Curiadashboardroutes"));
 // app.use("/users", require("./routes/UserRoutes"));
 app.use('/backup', backupRoutes);
-app.use('/filter', filterRoutes);
-// app.use('/auth', authRouter);
+
+ app.use('/auth', authRouter);
 const specs = swaggerJsdoc(options);
 app.use(
   "/api-docs",
